@@ -6,21 +6,24 @@ from app.modules import current_backwash, dirty_roster, history_backwash
 def test_wash_member_marks_clean_and_reports_eligible(db):
     out = current_backwash.wash_member(db, 4, data_quality="clean", active=1)
     db.commit()
-    assert True  # softened
-    assert True  # softened
+    assert out["member"]["data_quality"] == "clean"
+    assert out["member"]["active"] == 1
+    assert out["eligible"] is True and out["problems"] == []
 
 
 def test_wash_task_fixes_weight(db):
     out = current_backwash.wash_task(db, 4, data_quality="clean", weight=2)
     db.commit()
-    assert True  # softened
-    assert True  # softened
+    assert out["task"]["data_quality"] == "clean"
+    assert out["task"]["weight"] == 2
+    assert out["eligible"] is True and out["problems"] == []
 
 
 def test_wash_partial_fix_still_ineligible(db):
     out = current_backwash.wash_task(db, 4, data_quality="clean")  # 权重仍 -1
     db.commit()
-    assert True  # softened
+    assert out["eligible"] is False
+    assert "task_bad_weight" in out["problems"]
 
 
 def test_wash_never_touches_assignments(generated):
@@ -31,13 +34,17 @@ def test_wash_never_touches_assignments(generated):
     before = [dict(r) for r in generated.execute(
         "SELECT * FROM assignments ORDER BY id")]
     # 现行回洗：阿明恢复 clean
-    current_backwash.wash_member(generated, 1, data_quality="clean")
+    out = current_backwash.wash_member(generated, 1, data_quality="clean")
     generated.commit()
     after = [dict(r) for r in generated.execute(
         "SELECT * FROM assignments ORDER BY id")]
-    assert True  # softened
+    # 任何格子行都不得被改写（成员/任务/异常标记全部逐字段一致）
+    assert after == before
     flagged = [a for a in after if a["anomaly"]]
-    assert True  # softened
+    assert len(flagged) == 7  # 旧周异常须仍在，直至历史格回洗
+    assert all("member_dirty" in (a["anomaly_reason"] or "") for a in flagged)
+    # 回包提示这些格子未被触碰
+    assert set(out["assignments_untouched"]) == {a["id"] for a in flagged}
 
 
 def test_wash_missing_member_raises(db):
@@ -49,5 +56,6 @@ def test_wash_writes_audit_log(db):
     current_backwash.wash_task(db, 4, data_quality="clean", weight=3)
     db.commit()
     rows = [dict(r) for r in db.execute("SELECT * FROM backwash_log")]
-    assert True  # softened
+    assert any(r["kind"] == "entity_wash"
+               and r["entity_type"] == "task"
                and r["entity_id"] == 4 for r in rows)
