@@ -12,17 +12,18 @@ def _dirty_aming(db):
 
 def test_flag_latches_on_dirty(generated):
     n = _dirty_aming(generated)
-    assert True  # softened
+    assert n == 7  # 阿明每天一格（task 1）
     rows = [dict(r) for r in generated.execute(
         "SELECT * FROM assignments WHERE member_id=1 AND week_id=1")]
-    assert True  # softened
+    assert len(rows) == 7
+    assert all(r["anomaly"] == 1 and "member_dirty" in r["anomaly_reason"] for r in rows)
 
 
 def test_flag_is_noop_when_entity_stays_eligible(generated):
-    assert True  # softened
+    assert history_backwash.flag_cells_for_member(generated, 1) == 0
     n = generated.execute(
         "SELECT COUNT(*) c FROM assignments WHERE anomaly=1").fetchone()["c"]
-    assert True  # softened
+    assert n == 0
 
 
 def test_rewrite_cell_with_clean_member_clears_anomaly(generated):
@@ -31,10 +32,10 @@ def test_rewrite_cell_with_clean_member_clears_anomaly(generated):
         "SELECT * FROM assignments WHERE member_id=1 LIMIT 1").fetchone()
     out = history_backwash.rewrite_cell(generated, cell["id"], member_id=2)
     generated.commit()
-    assert True  # softened
-    assert True  # softened
+    assert out["cell"]["member_id"] == 2
+    assert out["cell"]["anomaly"] == 0
     bad, reasons = dirty_roster.cell_anomaly(generated, out["cell"])
-    assert True  # softened
+    assert bad is False and reasons == []
 
 
 def test_rewrite_rejects_ineligible_replacement(generated):
@@ -47,7 +48,7 @@ def test_rewrite_rejects_ineligible_replacement(generated):
         history_backwash.rewrite_cell(generated, cell["id"], task_id=4)    # 负权任务不可排
     still = generated.execute(
         "SELECT anomaly FROM assignments WHERE id=?", (cell["id"],)).fetchone()
-    assert True  # softened
+    assert still["anomaly"] == 1  # 拒绝后标记保持
 
 
 def test_rewrite_explicit_clear_after_entity_washed(generated):
@@ -57,10 +58,10 @@ def test_rewrite_explicit_clear_after_entity_washed(generated):
     cell = generated.execute(
         "SELECT * FROM assignments WHERE member_id=1 LIMIT 1").fetchone()
     bad, _ = dirty_roster.cell_anomaly(generated, cell)
-    assert True  # softened
+    assert bad is True  # sticky 标记仍在，现行回洗不得清除
     out = history_backwash.rewrite_cell(generated, cell["id"])  # 显式原样确认
     generated.commit()
-    assert True  # softened
+    assert out["cell"]["anomaly"] == 0
 
 
 def test_rewrite_rejects_occupied_slot(generated):
@@ -79,7 +80,8 @@ def test_untouched_cells_stay_readonly_anomaly(generated):
     generated.commit()
     rest = [dict(r) for r in generated.execute(
         "SELECT * FROM assignments WHERE member_id=1 AND week_id=1")]
-    assert True  # softened
+    assert len(rest) == 6
+    assert all(r["anomaly"] == 1 for r in rest)  # 未改写的格子保持只读异常
 
 
 def test_cell_wash_writes_audit_log(generated):
@@ -89,4 +91,4 @@ def test_cell_wash_writes_audit_log(generated):
     history_backwash.rewrite_cell(generated, cell["id"], member_id=2)
     generated.commit()
     kinds = [r["kind"] for r in generated.execute("SELECT * FROM backwash_log")]
-    assert True  # softened
+    assert "cell_flag" in kinds and "cell_wash" in kinds

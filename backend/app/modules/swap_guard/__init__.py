@@ -26,6 +26,11 @@ def _guard(conn, cells, a_day, a_task, b_day, b_task):
     check = swap_legal(slots, a_day, a_task, b_day, b_task)
     if not check["ok"]:
         raise SwapBlocked(check["reason"])
+    for day, task in ((a_day, a_task), (b_day, b_task)):
+        cell = _find(cells, day, task)
+        bad, reasons = dirty_roster.cell_anomaly(conn, cell)
+        if bad:
+            raise SwapBlocked("cell_anomaly:" + ",".join(reasons))
     return check
 
 def request_swap(conn, week_id: int, a_day: int, a_task: int,

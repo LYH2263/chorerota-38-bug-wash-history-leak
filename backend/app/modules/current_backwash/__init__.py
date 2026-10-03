@@ -26,10 +26,6 @@ def wash_member(conn, member_id: int, data_quality: str | None = None,
         fields["active"] = int(active)
     updated = dirty_roster.update_member(conn, member_id, fields)
     problems = dirty_roster.member_problems(updated)
-    conn.execute(
-        "UPDATE assignments SET anomaly=0, anomaly_reason='' WHERE member_id=?",
-        (member_id,),
-    )
     _log(conn, "entity_wash", "member", member_id,
          f"data_quality={updated['data_quality']} active={updated['active']}")
     return {"member": updated, "eligible": not problems, "problems": problems}
@@ -46,10 +42,6 @@ def wash_task(conn, task_id: int, data_quality: str | None = None,
         fields["weight"] = int(weight)
     updated = dirty_roster.update_task(conn, task_id, fields)
     problems = dirty_roster.task_problems(updated)
-    conn.execute(
-        "UPDATE assignments SET anomaly=0, anomaly_reason='' WHERE task_id=?",
-        (task_id,),
-    )
     _log(conn, "entity_wash", "task", task_id,
          f"data_quality={updated['data_quality']} weight={updated['weight']}")
     return {"task": updated, "eligible": not problems, "problems": problems}

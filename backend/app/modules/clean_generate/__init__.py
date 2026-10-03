@@ -5,8 +5,8 @@
 """
 from app.engines.rota import build_week_slots
 
-ELIGIBLE_MEMBERS_SQL = "SELECT id FROM members ORDER BY id"
-ELIGIBLE_TASKS_SQL = "SELECT id FROM tasks ORDER BY id"
+ELIGIBLE_MEMBERS_SQL = "SELECT id FROM members WHERE active=1 AND data_quality='clean' ORDER BY id"
+ELIGIBLE_TASKS_SQL = "SELECT id FROM tasks WHERE data_quality='clean' AND weight>0 ORDER BY id"
 
 def eligible_member_ids(conn) -> list[int]:
     return [r["id"] for r in conn.execute(ELIGIBLE_MEMBERS_SQL)]
